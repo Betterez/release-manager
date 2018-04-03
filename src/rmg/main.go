@@ -48,6 +48,8 @@ func main() {
 	}
 
 	for _, currentTargetGroup := range selectedTargetGroups {
+		approuvedTargetGroupsNumber := 0
+		sleepers := 0
 		targetDescription, _ := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
 			TargetGroupArn: currentTargetGroup.TargetGroupArn,
 		})
@@ -57,8 +59,19 @@ func main() {
 				healthCount++
 			}
 		}
-		if healthCount == len(targetDescription.TargetHealthDescriptions) {
-
+		if healthCount != len(targetDescription.TargetHealthDescriptions) && sleepers < 10 {
+			log.Println("still waiting for the healthcheck")
+			time.Sleep(time.Second * 5)
+			sleepers++
+		} else if sleepers >= 10 {
+			log.Println("Waiting too long for healthcheck to be finished")
+			os.Exit(1)
+		} else if healthCount == len(targetDescription.TargetHealthDescriptions) {
+			approuvedTargetGroupsNumber++
+		}
+		if approuvedTargetGroupsNumber == len(selectedSourceGroups) {
+			log.Println("Done inserting.")
+			break
 		}
 	}
 
