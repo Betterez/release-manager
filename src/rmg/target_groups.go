@@ -95,7 +95,7 @@ func removeOldInstancesFrom(sourceTargetGroup *elbv2.TargetGroup, targetTargetGr
 		return err
 	}
 	for _, currentTargetTargetGroup := range targetTargetGroups {
-		targetsToREmove := []*elbv2.TargetDescription{}
+		targetsToRemove := []*elbv2.TargetDescription{}
 		descriptions, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
 			TargetGroupArn: currentTargetTargetGroup.TargetGroupArn,
 		})
@@ -104,8 +104,17 @@ func removeOldInstancesFrom(sourceTargetGroup *elbv2.TargetGroup, targetTargetGr
 		}
 		for _, description := range descriptions.TargetHealthDescriptions {
 			if !idChecker(*description.Target.Id) {
-				description.ta
+				targetsToRemove = append(targetsToRemove, description.Target)
 			}
+		}
+		if len(targetsToRemove) > 0 {
+			_, err = elbService.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+				TargetGroupArn: currentTargetTargetGroup.TargetGroupArn,
+				Targets:        targetsToRemove,
+			})
+		}
+		if nil != err {
+			return err
 		}
 	}
 	return nil
