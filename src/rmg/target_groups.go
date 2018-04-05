@@ -56,3 +56,11 @@ func getSourceAndTargetGroups(environment, path, elbType string, sess *session.S
 	}
 	return selectedSourceGroups, selectedTargetGroups, nil
 }
+
+func createInstanceIDChecker(sourceTargetGroup *elbv2.TargetGroup) {
+
+}
+
+func removeOldInstancesFrom(sourceTargetGroup *elbv2.TargetGroup, targetTargetGroups []*elbv2.TargetGroup) {
+
+}

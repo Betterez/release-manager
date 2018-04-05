@@ -4,19 +4,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	//"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/elbv2"
 	"log"
 	"os"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/elbv2"
 )
 
 func main() {
 	environment := flag.String("env", "", "environment to perform the switch")
 	path := flag.String("path", "", "project path")
-	elb_type := flag.String("elb-type", "", "the elb type")
+	elbType := flag.String("elb-type", "", "the elb type")
 	flag.Parse()
 	sess, err := GetAWSSession()
 	if err != nil {
@@ -25,7 +27,7 @@ func main() {
 	}
 	elbService := elbv2.New(sess)
 	fmt.Printf("Looking for project %s, in %s\r\n", *path, *environment)
-	selectedSourceGroups, selectedTargetGroups, err := getSourceAndTargetGroups(*environment, *path, *elb_type, sess)
+	selectedSourceGroups, selectedTargetGroups, err := getSourceAndTargetGroups(*environment, *path, *elbType, sess)
 	if len(selectedSourceGroups) == 0 || len(selectedTargetGroups) == 0 {
 		fmt.Println("target or source groups have no members, can't switch")
 		os.Exit(1)
@@ -38,9 +40,6 @@ func main() {
 		fmt.Printf("There are %d source group. can only use one.\r\n", len(selectedSourceGroups))
 		os.Exit(1)
 	}
-	sourceHealthCheck, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
-		TargetGroupArn: selectedSourceGroups[0].TargetGroupArn,
-	})
 
 	if nil != err {
 		fmt.Println("error getting the source instances")
