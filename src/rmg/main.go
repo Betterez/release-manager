@@ -90,7 +90,11 @@ func main() {
 			break
 		}
 	}
-
+	fmt.Println("Removing unused instances...")
+	err = removeOldInstancesFrom(selectedSourceGroups[0], selectedTargetGroups)
+	if nil != err {
+		fmt.Println("remove done with an error", err)
+	}
 	log.Println("Done")
 }
 

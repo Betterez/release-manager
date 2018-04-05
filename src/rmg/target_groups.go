@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 )
@@ -107,6 +109,7 @@ func removeOldInstancesFrom(sourceTargetGroup *elbv2.TargetGroup, targetTargetGr
 				targetsToRemove = append(targetsToRemove, description.Target)
 			}
 		}
+		fmt.Printf("Removing %d instances from %s\r\n", len(targetsToRemove), *currentTargetTargetGroup.TargetGroupName)
 		if len(targetsToRemove) > 0 {
 			_, err = elbService.DeregisterTargets(&elbv2.DeregisterTargetsInput{
 				TargetGroupArn: currentTargetTargetGroup.TargetGroupArn,
