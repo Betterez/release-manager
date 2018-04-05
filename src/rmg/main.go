@@ -30,6 +30,22 @@ func main() {
 		fmt.Println("target or source groups have no members, can't switch")
 		os.Exit(1)
 	}
+	if err != nil {
+		fmt.Println("can't get source/target groups", err)
+		os.Exit(1)
+	}
+	if len(selectedSourceGroups) != 1 {
+		fmt.Printf("There are %d source group. can only use one.\r\n", len(selectedSourceGroups))
+		os.Exit(1)
+	}
+	sourceHealthCheck, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
+		TargetGroupArn: selectedSourceGroups[0].TargetGroupArn,
+	})
+
+	if nil != err {
+		fmt.Println("error getting the source instances")
+	}
+
 	targetRegisterRequest := []*elbv2.TargetDescription{}
 	fmt.Println("source groups:")
 	for _, currentTargetGroup := range selectedSourceGroups {
