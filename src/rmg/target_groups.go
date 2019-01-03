@@ -11,43 +11,45 @@ func getSourceAndTargetGroups(environment, path, elbType string, sess *session.S
 	selectedSourceGroups := []*elbv2.TargetGroup{}
 	selectedTargetGroups := []*elbv2.TargetGroup{}
 	elbService := elbv2.New(sess)
-	targetGroups, err := elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
+	allTargetGroups, err := elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, currentTargetGroupt := range targetGroups.TargetGroups {
-		numberOfPasses := 0
-		releaseTg := false
-		tags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{
+	for _, currentTargetGroupt := range allTargetGroups.TargetGroups {
+		targetGroupTags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{
 			ResourceArns: []*string{currentTargetGroupt.TargetGroupArn},
 		})
 		if err != nil {
 			continue
 		}
-		for _, tagDescription := range tags.TagDescriptions {
-			if numberOfPasses == 4 {
-				break
-			}
-			for _, tagMeta := range tagDescription.Tags {
-				if *tagMeta.Key == "Environment" && *tagMeta.Value == environment {
-					numberOfPasses++
-				}
-				if *tagMeta.Key == "Elb-Type" && *tagMeta.Value == elbType {
-					numberOfPasses++
-				}
-				if *tagMeta.Key == "Path-Name" && *tagMeta.Value == path {
-					numberOfPasses++
-				}
+
+	}
+	return selectedSourceGroups, selectedTargetGroups, nil
+}
+
+func checkTargetGroupTagsForMatch(targetGroupTags *elbv2.DescribeTagsOutput, environment, path, elbType string) {
+	tagNameValues := []string{"Environment", "Elb-Type", "Path-Name", "Release"}
+	tagValues := []string{environment, elbType, path, "yes"}
+	numberOfMatchingTags := 0
+	isAReleaseTargetGroup := false
+	for _, tagDescription := range targetGroupTags.TagDescriptions {
+		if numberOfMatchingTags == 4 {
+			break
+		}
+		for _, tagMeta := range tagDescription.Tags {
+			for i, tagName := range tagNameValues {
 				if *tagMeta.Key == "Release" {
-					numberOfPasses++
+					numberOfMatchingTags++
 					if *tagMeta.Value == "yes" {
-						releaseTg = true
+						isAReleaseTargetGroup = true
 					} else {
-						releaseTg = false
+						isAReleaseTargetGroup = false
 					}
+				} else if *tagMeta.Key == tagName && *tagMeta.Value == tagValues[i] {
+					numberOfMatchingTags++
 				}
-				if numberOfPasses == 4 {
-					if releaseTg {
+				if numberOfMatchingTags == len(tagNameValues) {
+					if !isAReleaseTargetGroup {
 						selectedSourceGroups = append(selectedSourceGroups, currentTargetGroupt)
 					} else {
 						selectedTargetGroups = append(selectedTargetGroups, currentTargetGroupt)
@@ -56,9 +58,7 @@ func getSourceAndTargetGroups(environment, path, elbType string, sess *session.S
 			}
 		}
 	}
-	return selectedSourceGroups, selectedTargetGroups, nil
 }
-
 func createInstanceIDChecker(sourceTargetGroup *elbv2.TargetGroup) (func(string) bool, error) {
 	sess, err := GetAWSSession()
 	if nil != err {

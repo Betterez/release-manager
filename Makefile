@@ -8,7 +8,7 @@ run: default
 	@bin/rmg
 	@echo ""
 
-r2: default
+run2: default
 	@bin/rmg --env=staging --elb-type=api --path=notifications
 	@echo ""
 

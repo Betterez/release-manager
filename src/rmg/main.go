@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+
 	//"github.com/aws/aws-sdk-go/service/ec2"
 	"log"
 	"os"
@@ -26,8 +27,13 @@ func main() {
 		os.Exit(1)
 	}
 	elbService := elbv2.New(sess)
-	fmt.Printf("Looking for project %s, in %s\r\n", *path, *environment)
+	log.Printf("Looking for project %s, in %s\r\n", *path, *environment)
 	selectedSourceGroups, selectedTargetGroups, err := getSourceAndTargetGroups(*environment, *path, *elbType, sess)
+	log.Printf("found %d source groups, %d target groups for %s in %s\r\n",
+		len(selectedSourceGroups),
+		len(selectedTargetGroups),
+		*path, *environment,
+	)
 	if len(selectedSourceGroups) == 0 || len(selectedTargetGroups) == 0 {
 		fmt.Println("target or source groups have no members, can't switch")
 		os.Exit(1)
@@ -38,9 +44,12 @@ func main() {
 	}
 	if len(selectedSourceGroups) != 1 {
 		fmt.Printf("There are %d source group. can only use one.\r\n", len(selectedSourceGroups))
+		for index, stg := range selectedSourceGroups {
+			fmt.Println(index, *stg.TargetGroupArn)
+		}
 		os.Exit(1)
 	}
-
+	os.Exit(0)
 	if nil != err {
 		fmt.Println("error getting the source instances")
 	}
