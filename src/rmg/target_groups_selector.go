@@ -7,16 +7,34 @@ import (
 
 // TargetGroupSelector - filter target groups based on tags
 type TargetGroupSelector struct {
-	selectedSourceGroups []*elbv2.TargetGroup
-	selectedTargetGroups []*elbv2.TargetGroup
+	SelectedSourceGroups []*elbv2.TargetGroup
+	SelectedTargetGroups []*elbv2.TargetGroup
 	allTargetGroups      *elbv2.DescribeTargetGroupsOutput
 	awsSession           *session.Session
+	environment          string
+	path                 string
+	elbType              string
 }
 
-func (tgs *TargetGroupSelector) init(sess *session.Session) {
+// TargetGroupSearchResult - results from target group search
+type TargetGroupSearchResult int
+
+const (
+	// TargetGroupNotFound - target group not found
+	TargetGroupNotFound TargetGroupSearchResult = iota
+	// TargetGroupFoundNonRelease -source (not release) tg
+	TargetGroupFoundNonRelease
+	// TargetGroupFoundRelease - release tg
+	TargetGroupFoundRelease
+)
+
+func (tgs *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) {
 	tgs.awsSession = sess
-	tgs.selectedSourceGroups = make([]*elbv2.TargetGroup, 0)
-	tgs.selectedTargetGroups = make([]*elbv2.TargetGroup, 0)
+	tgs.SelectedSourceGroups = make([]*elbv2.TargetGroup, 0)
+	tgs.SelectedTargetGroups = make([]*elbv2.TargetGroup, 0)
+	tgs.path = path
+	tgs.environment = environment
+	tgs.elbType = elbType
 }
 
 func (tgs *TargetGroupSelector) getAllTargetGroups() error {
@@ -38,12 +56,49 @@ func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
 		if err != nil {
 			return err
 		}
-		tgs.checkTargetGroupTagsForMatch(targetGroupTags)
+		switch tgs.checkTargetGroupTagsForMatch(targetGroupTags) {
+		case TargetGroupFoundRelease:
+			tgs.SelectedTargetGroups = append(tgs.SelectedTargetGroups, currentTargetGroupt)
+			break
+		case TargetGroupFoundNonRelease:
+			tgs.SelectedSourceGroups = append(tgs.SelectedSourceGroups, currentTargetGroupt)
+			break
+		default:
+			break
+		}
 	}
 	return nil
 }
 
-func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(tagsInfo *elbv2.DescribeTagsOutput) error {
-
-	return nil
+func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *elbv2.DescribeTagsOutput) TargetGroupSearchResult {
+	tagNameValues := []string{"Environment", "Elb-Type", "Path-Name", "Release"}
+	tagValues := []string{tgs.environment, tgs.elbType, tgs.path, "yes"}
+	numberOfMatchingTags := 0
+	isAReleaseTargetGroup := false
+	for _, tagDescription := range targetGroupTags.TagDescriptions {
+		if numberOfMatchingTags == 4 {
+			break
+		}
+		for _, tagMeta := range tagDescription.Tags {
+			for i, tagName := range tagNameValues {
+				if *tagMeta.Key == "Release" {
+					numberOfMatchingTags++
+					if *tagMeta.Value == "yes" {
+						isAReleaseTargetGroup = true
+					} else {
+						isAReleaseTargetGroup = false
+					}
+				} else if *tagMeta.Key == tagName && *tagMeta.Value == tagValues[i] {
+					numberOfMatchingTags++
+				}
+				if numberOfMatchingTags == len(tagNameValues) {
+					if !isAReleaseTargetGroup {
+						return TargetGroupFoundRelease
+					}
+					return TargetGroupFoundNonRelease
+				}
+			}
+		}
+	}
+	return TargetGroupNotFound
 }

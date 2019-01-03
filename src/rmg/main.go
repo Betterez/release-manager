@@ -28,7 +28,10 @@ func main() {
 	}
 	elbService := elbv2.New(sess)
 	log.Printf("Looking for project %s, in %s\r\n", *path, *environment)
-	selectedSourceGroups, selectedTargetGroups, err := getSourceAndTargetGroups(*environment, *path, *elbType, sess)
+	selector := &TargetGroupSelector{}
+	selector.init(sess, *environment, *path, *elbType)
+	selector.checkTargetGroupsForMatch()
+	selectedSourceGroups, selectedTargetGroups := selector.SelectedSourceGroups, selector.SelectedTargetGroups
 	log.Printf("found %d source groups, %d target groups for %s in %s\r\n",
 		len(selectedSourceGroups),
 		len(selectedTargetGroups),
