@@ -9,13 +9,15 @@ import (
 
 // TargetGroupSelector - filter target groups based on tags
 type TargetGroupSelector struct {
+	// SelectedSourceGroups - target groups that are release and will be used to get new instances
 	SelectedSourceGroups []*elbv2.TargetGroup
-	SelectedTargetGroups []*elbv2.TargetGroup
-	awsSession           *session.Session
-	allTargetGroups      *elbv2.DescribeTargetGroupsOutput
-	environment          string
-	path                 string
-	elbType              string
+	// SelectedTargetGroups - target groups that are not release, and will be used to put the new instances
+	SelectedTargetGroups         []*elbv2.TargetGroup
+	awsSession                   *session.Session
+	allTargetGroupsForTheAccount *elbv2.DescribeTargetGroupsOutput
+	environment                  string
+	path                         string
+	elbType                      string
 }
 
 // TargetGroupSearchResult - results from target group search
@@ -43,10 +45,10 @@ func (tgs *TargetGroupSelector) init(sess *session.Session, environment, path, e
 	return nil
 }
 
-func (tgs *TargetGroupSelector) getAllTargetGroups() error {
+func (tgs *TargetGroupSelector) getallTargetGroupsForTheAccount() error {
 	elbService := elbv2.New(tgs.awsSession)
 	var err error
-	tgs.allTargetGroups, err = elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
+	tgs.allTargetGroupsForTheAccount, err = elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
 	if err != nil {
 		return err
 	}
@@ -54,9 +56,9 @@ func (tgs *TargetGroupSelector) getAllTargetGroups() error {
 }
 
 func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
-	tgs.getAllTargetGroups()
+	tgs.getallTargetGroupsForTheAccount()
 	elbService := elbv2.New(tgs.awsSession)
-	for _, currentTargetGroupt := range tgs.allTargetGroups.TargetGroups {
+	for _, currentTargetGroupt := range tgs.allTargetGroupsForTheAccount.TargetGroups {
 		targetGroupTags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{
 			ResourceArns: []*string{currentTargetGroupt.TargetGroupArn},
 		})
@@ -65,10 +67,10 @@ func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
 		}
 		switch tgs.checkTargetGroupTagsForMatch(targetGroupTags) {
 		case TargetGroupFoundRelease:
-			tgs.SelectedTargetGroups = append(tgs.SelectedTargetGroups, currentTargetGroupt)
+			tgs.SelectedSourceGroups = append(tgs.SelectedTargetGroups, currentTargetGroupt)
 			break
 		case TargetGroupFoundNonRelease:
-			tgs.SelectedSourceGroups = append(tgs.SelectedSourceGroups, currentTargetGroupt)
+			tgs.SelectedTargetGroups = append(tgs.SelectedSourceGroups, currentTargetGroupt)
 			break
 		default:
 			break

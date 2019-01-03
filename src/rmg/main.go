@@ -7,8 +7,8 @@ import (
 	//"github.com/aws/aws-sdk-go/service/ec2"
 	"log"
 	"os"
-	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 )
 
@@ -22,92 +22,31 @@ func main() {
 		fmt.Println("error getting session:", err)
 		os.Exit(1)
 	}
-	elbService := elbv2.New(sess)
 	log.Printf("Looking for project %s, in %s\r\n", *path, *environment)
 	selector := &TargetGroupSelector{}
-	if selector.init(sess, *environment, *path, *elbType) != nil {
+	if err = selector.init(sess, *environment, *path, *elbType); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("selector initialized, scanning target groups...")
-	selector.checkTargetGroupsForMatch()
-	log.Println("done scanning")
-	selectedSourceGroups, selectedTargetGroups := selector.SelectedSourceGroups, selector.SelectedTargetGroups
-	fmt.Println("targets")
-	for _, tg := range selectedTargetGroups {
-		fmt.Println(*tg.TargetGroupName)
+	// log.Println("selector initialized, scanning target groups...")
+	// if err = selector.checkTargetGroupsForMatch(); err != nil {
+	// 	log.Fatal(err)
+	// }
+	// log.Println("done scanning")
+	instancesSwitcher := InstancesSwitcher{}
+	if err = instancesSwitcher.Init(sess, []*elbv2.TargetGroup{
+		{
+			TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/ngtg-stgng-notifications/bde5f8e46e4c88f4"),
+		}}, []*elbv2.TargetGroup{
+		{
+			TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/staging-notifications-in-tg/2982b148db63dd02"),
+		},
+	}); err != nil {
+		log.Fatal(err)
 	}
-	fmt.Println("sources")
-	for _, tg := range selectedSourceGroups {
-		fmt.Println(*tg.TargetGroupName)
+	if err = instancesSwitcher.getInstancesInGroups(); err != nil {
+		log.Fatal(err)
 	}
-	if len(selectedSourceGroups) == 0 || len(selectedTargetGroups) == 0 {
-		fmt.Println("target or source groups have no members, can't switch")
-		os.Exit(1)
-	}
-	if err != nil {
-		fmt.Println("can't get source/target groups", err)
-		os.Exit(1)
-	}
-	if len(selectedSourceGroups) != 1 {
-		fmt.Printf("There are %d source group. can only use one.\r\n", len(selectedSourceGroups))
-		for index, stg := range selectedSourceGroups {
-			fmt.Println(index, *stg.TargetGroupArn)
-		}
-		os.Exit(1)
-	}
-	if nil != err {
-		fmt.Println("error getting the source instances")
-	}
-
-	targetRegisterRequest := []*elbv2.TargetDescription{}
-	fmt.Println("source groups:")
-	for _, currentTargetGroup := range selectedSourceGroups {
-		targetDescription, _ := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
-			TargetGroupArn: currentTargetGroup.TargetGroupArn,
-		})
-		for ord, desc := range targetDescription.TargetHealthDescriptions {
-			targetRegisterRequest = append(targetRegisterRequest, desc.Target)
-			fmt.Printf("%d. %s - %s\r\n", ord, *desc.Target.Id, *desc.TargetHealth.State)
-		}
-	}
-	for _, currentTargetGroup := range selectedTargetGroups {
-		elbService.RegisterTargets(&elbv2.RegisterTargetsInput{
-			TargetGroupArn: currentTargetGroup.TargetGroupArn,
-			Targets:        targetRegisterRequest,
-		})
-	}
-
-	for _, currentTargetGroup := range selectedTargetGroups {
-		approuvedTargetGroupsNumber := 0
-		sleepers := 0
-		targetDescription, _ := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
-			TargetGroupArn: currentTargetGroup.TargetGroupArn,
-		})
-		healthCount := 0
-		for _, currentState := range targetDescription.TargetHealthDescriptions {
-			if *currentState.TargetHealth.State == "healthy" {
-				healthCount++
-			}
-		}
-		if healthCount != len(targetDescription.TargetHealthDescriptions) && sleepers < 10 {
-			log.Println("still waiting for the healthcheck")
-			time.Sleep(time.Second * 5)
-			sleepers++
-		} else if sleepers >= 10 {
-			log.Println("Waiting too long for healthcheck to be finished")
-			os.Exit(1)
-		} else if healthCount == len(targetDescription.TargetHealthDescriptions) {
-			approuvedTargetGroupsNumber++
-		}
-		if approuvedTargetGroupsNumber == len(selectedSourceGroups) {
-			log.Println("Done inserting.")
-			break
-		}
-	}
-	fmt.Println("Removing unused instances...")
-	err = removeOldInstancesFrom(selectedSourceGroups[0], selectedTargetGroups)
-	if nil != err {
-		fmt.Println("remove done with an error", err)
-	}
+	fmt.Println(instancesSwitcher.sourceInstancesDescriptions)
+	fmt.Println(instancesSwitcher.targetInstancesDescriptions)
 	log.Println("Done")
 }
