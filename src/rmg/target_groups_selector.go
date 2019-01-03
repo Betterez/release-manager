@@ -11,8 +11,8 @@ import (
 type TargetGroupSelector struct {
 	SelectedSourceGroups []*elbv2.TargetGroup
 	SelectedTargetGroups []*elbv2.TargetGroup
-	allTargetGroups      *elbv2.DescribeTargetGroupsOutput
 	awsSession           *session.Session
+	allTargetGroups      *elbv2.DescribeTargetGroupsOutput
 	environment          string
 	path                 string
 	elbType              string
