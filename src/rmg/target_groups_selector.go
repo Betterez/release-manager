@@ -71,34 +71,44 @@ func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
 }
 
 func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *elbv2.DescribeTagsOutput) TargetGroupSearchResult {
-	tagNameValues := []string{"Environment", "Elb-Type", "Path-Name", "Release"}
-	tagValues := []string{tgs.environment, tgs.elbType, tgs.path, "yes"}
 	numberOfMatchingTags := 0
 	isAReleaseTargetGroup := false
 	for _, tagDescription := range targetGroupTags.TagDescriptions {
-		if numberOfMatchingTags == 4 {
-			break
-		}
-		for _, tagMeta := range tagDescription.Tags {
-			for i, tagName := range tagNameValues {
-				if *tagMeta.Key == "Release" {
-					numberOfMatchingTags++
-					if *tagMeta.Value == "yes" {
-						isAReleaseTargetGroup = true
-					} else {
-						isAReleaseTargetGroup = false
-					}
-				} else if *tagMeta.Key == tagName && *tagMeta.Value == tagValues[i] {
+		for _, currentTagData := range tagDescription.Tags {
+			switch *currentTagData.Key {
+			case "Release":
+				if *currentTagData.Value == "yes" {
+					isAReleaseTargetGroup = true
 					numberOfMatchingTags++
 				}
-				if numberOfMatchingTags == len(tagNameValues) {
-					if !isAReleaseTargetGroup {
-						return TargetGroupFoundRelease
-					}
-					return TargetGroupFoundNonRelease
+				if *currentTagData.Value == "no" {
+					isAReleaseTargetGroup = false
+					numberOfMatchingTags++
 				}
+				break
+			case "Environment":
+				if *currentTagData.Value == tgs.environment {
+					numberOfMatchingTags++
+				}
+				break
+			case "Elb-Type":
+				if *currentTagData.Value == tgs.elbType {
+					numberOfMatchingTags++
+				}
+				break
+			case "Path-Name":
+				if *currentTagData.Value == tgs.path {
+					numberOfMatchingTags++
+				}
+				break
 			}
 		}
+	}
+	if numberOfMatchingTags == 4 {
+		if isAReleaseTargetGroup {
+			return TargetGroupFoundRelease
+		}
+		return TargetGroupFoundNonRelease
 	}
 	return TargetGroupNotFound
 }
