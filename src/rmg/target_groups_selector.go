@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 )
@@ -28,13 +30,17 @@ const (
 	TargetGroupFoundRelease
 )
 
-func (tgs *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) {
+func (tgs *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) error {
+	if sess == nil {
+		return errors.New("Bad session object")
+	}
 	tgs.awsSession = sess
 	tgs.SelectedSourceGroups = make([]*elbv2.TargetGroup, 0)
 	tgs.SelectedTargetGroups = make([]*elbv2.TargetGroup, 0)
 	tgs.path = path
 	tgs.environment = environment
 	tgs.elbType = elbType
+	return nil
 }
 
 func (tgs *TargetGroupSelector) getAllTargetGroups() error {
@@ -48,6 +54,7 @@ func (tgs *TargetGroupSelector) getAllTargetGroups() error {
 }
 
 func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
+	tgs.getAllTargetGroups()
 	elbService := elbv2.New(tgs.awsSession)
 	for _, currentTargetGroupt := range tgs.allTargetGroups.TargetGroups {
 		targetGroupTags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{

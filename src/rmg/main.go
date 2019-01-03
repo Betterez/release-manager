@@ -1,12 +1,8 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 
 	//"github.com/aws/aws-sdk-go/service/ec2"
 	"log"
@@ -29,14 +25,21 @@ func main() {
 	elbService := elbv2.New(sess)
 	log.Printf("Looking for project %s, in %s\r\n", *path, *environment)
 	selector := &TargetGroupSelector{}
-	selector.init(sess, *environment, *path, *elbType)
+	if selector.init(sess, *environment, *path, *elbType) != nil {
+		log.Fatal(err)
+	}
+	log.Println("selector initialized, scanning target groups...")
 	selector.checkTargetGroupsForMatch()
+	log.Println("done scanning")
 	selectedSourceGroups, selectedTargetGroups := selector.SelectedSourceGroups, selector.SelectedTargetGroups
-	log.Printf("found %d source groups, %d target groups for %s in %s\r\n",
-		len(selectedSourceGroups),
-		len(selectedTargetGroups),
-		*path, *environment,
-	)
+	fmt.Println("targets")
+	for _, tg := range selectedTargetGroups {
+		fmt.Println(*tg.TargetGroupName)
+	}
+	fmt.Println("sources")
+	for _, tg := range selectedSourceGroups {
+		fmt.Println(*tg.TargetGroupName)
+	}
 	if len(selectedSourceGroups) == 0 || len(selectedTargetGroups) == 0 {
 		fmt.Println("target or source groups have no members, can't switch")
 		os.Exit(1)
@@ -52,7 +55,6 @@ func main() {
 		}
 		os.Exit(1)
 	}
-	os.Exit(0)
 	if nil != err {
 		fmt.Println("error getting the source instances")
 	}
@@ -108,16 +110,4 @@ func main() {
 		fmt.Println("remove done with an error", err)
 	}
 	log.Println("Done")
-}
-
-// GetAWSSession -  creates an aws session
-func GetAWSSession() (*session.Session, error) {
-	sess, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
-	if err != nil {
-		return nil, err
-	}
-	if sess == nil {
-		return nil, errors.New("can't create aws session")
-	}
-	return sess, nil
 }
