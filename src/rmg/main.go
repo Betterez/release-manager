@@ -34,9 +34,6 @@ func main() {
 	if err = instancesSwitcher.Init(sess, selector.SelectedSourceGroups, selector.SelectedTargetGroups); err != nil {
 		log.Fatal(err)
 	}
-	if err = instancesSwitcher.getInstancesInGroups(); err != nil {
-		log.Fatal(err)
-	}
 	if err = instancesSwitcher.SwitchInstances(); err != nil {
 		log.Fatal(err)
 	}

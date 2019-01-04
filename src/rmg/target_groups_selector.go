@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
@@ -68,19 +67,15 @@ func (thisSelector *TargetGroupSelector) checkTargetGroupsForMatch() error {
 		}
 		switch thisSelector.checkTargetGroupTagsForMatch(targetGroupTags) {
 		case TargetGroupFoundRelease:
-			fmt.Printf("adding %s to release(source)\r\n", *currentTargetGroupt.TargetGroupName)
-			thisSelector.SelectedSourceGroups = append(thisSelector.SelectedTargetGroups, currentTargetGroupt)
+			thisSelector.SelectedSourceGroups = append(thisSelector.SelectedSourceGroups, currentTargetGroupt)
 			break
 		case TargetGroupFoundNonRelease:
-			fmt.Printf("adding %s to none release(target)\r\n", *currentTargetGroupt.TargetGroupName)
-			thisSelector.SelectedTargetGroups = append(thisSelector.SelectedSourceGroups, currentTargetGroupt)
+			thisSelector.SelectedTargetGroups = append(thisSelector.SelectedTargetGroups, currentTargetGroupt)
 			break
 		default:
 			break
 		}
 	}
-	fmt.Printf("done scanning: \r\n%v\r\n\r\n%v\r\n", thisSelector.SelectedSourceGroups, thisSelector.SelectedTargetGroups)
-	fmt.Printf("done scanning: \r\n%v\r\n", thisSelector.GetTargetGroupsName())
 	return nil
 }
 
