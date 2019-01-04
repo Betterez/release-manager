@@ -7,9 +7,6 @@ import (
 	//"github.com/aws/aws-sdk-go/service/ec2"
 	"log"
 	"os"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/elbv2"
 )
 
 func main() {
@@ -27,26 +24,27 @@ func main() {
 	if err = selector.init(sess, *environment, *path, *elbType); err != nil {
 		log.Fatal(err)
 	}
-	// log.Println("selector initialized, scanning target groups...")
-	// if err = selector.checkTargetGroupsForMatch(); err != nil {
-	// 	log.Fatal(err)
-	// }
-	// log.Println("done scanning")
+	log.Println("selector initialized, scanning target groups...")
+	if err = selector.checkTargetGroupsForMatch(); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("done scanning")
 	instancesSwitcher := InstancesSwitcher{}
-	if err = instancesSwitcher.Init(sess, []*elbv2.TargetGroup{
-		{
-			TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/ngtg-stgng-notifications/bde5f8e46e4c88f4"),
-		}}, []*elbv2.TargetGroup{
-		{
-			TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/staging-notifications-in-tg/2982b148db63dd02"),
-		},
-	}); err != nil {
+	if err = instancesSwitcher.Init(sess, selector.SelectedSourceGroups, selector.SelectedTargetGroups); err != nil {
+		// if err = instancesSwitcher.Init(sess, []*elbv2.TargetGroup{
+		// 	{
+		// 		TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/ngtg-stgng-notifications/bde5f8e46e4c88f4"),
+		// 	}}, []*elbv2.TargetGroup{
+		// 	{
+		// 		TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/staging-notifications-in-tg/2982b148db63dd02"),
+		// 	},
+		// }); err != nil {
 		log.Fatal(err)
 	}
 	if err = instancesSwitcher.getInstancesInGroups(); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(instancesSwitcher.sourceInstancesDescriptions)
-	fmt.Println(instancesSwitcher.targetInstancesDescriptions)
+	fmt.Println(instancesSwitcher.targetInstancesMapDescriptions)
 	log.Println("Done")
 }

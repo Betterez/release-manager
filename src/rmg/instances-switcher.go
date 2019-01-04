@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
@@ -9,11 +10,11 @@ import (
 
 // InstancesSwitcher - deploy instances from the source group to the target one
 type InstancesSwitcher struct {
-	awsSession                  *session.Session
-	SelectedSourceGroups        []*elbv2.TargetGroup
-	SelectedTargetGroups        []*elbv2.TargetGroup
-	sourceInstancesDescriptions []*elbv2.TargetDescription
-	targetInstancesDescriptions []*elbv2.TargetDescription
+	awsSession                     *session.Session
+	SelectedSourceGroups           []*elbv2.TargetGroup
+	SelectedTargetGroups           []*elbv2.TargetGroup
+	sourceInstancesDescriptions    []*elbv2.TargetDescription
+	targetInstancesMapDescriptions map[string][]*elbv2.TargetDescription
 }
 
 // Init - initialize
@@ -30,19 +31,35 @@ func (is *InstancesSwitcher) Init(sess *session.Session, sourceTargetGroups, tar
 	is.awsSession = sess
 	is.SelectedSourceGroups = sourceTargetGroups
 	is.SelectedTargetGroups = targetTargetGroups
+	is.targetInstancesMapDescriptions = make(map[string][]*elbv2.TargetDescription, 0)
+	return nil
+}
 
+// SwitchInstances - switch instances from the source group to the rtarget groups
+func (is *InstancesSwitcher) SwitchInstances() error {
+	if len(is.sourceInstancesDescriptions) == 0 {
+		return errors.New("no source instances")
+	}
 	return nil
 }
 
 func (is *InstancesSwitcher) getInstancesInGroups() error {
 	is.sourceInstancesDescriptions = make([]*elbv2.TargetDescription, 0)
-	is.targetInstancesDescriptions = make([]*elbv2.TargetDescription, 0)
 	if err := getInstancesDescriptionForGroups(is.SelectedSourceGroups, &is.sourceInstancesDescriptions, is.awsSession); err != nil {
 		return err
 	}
-	if err := getInstancesDescriptionForGroups(is.SelectedTargetGroups, &is.targetInstancesDescriptions, is.awsSession); err != nil {
-		return err
+	var targetGroupDescription []*elbv2.TargetDescription
+	for _, targetGroup := range is.SelectedTargetGroups {
+		fmt.Printf("checking %s\r\n", *targetGroup.TargetGroupName)
+		if err := getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetGroup},
+			&targetGroupDescription,
+			is.awsSession); err != nil {
+			return err
+		}
+		is.targetInstancesMapDescriptions[*targetGroup.TargetGroupName] = targetGroupDescription
+		//fmt.Println("targetGroupDescription", targetGroupDescription, "targetGroupDescription")
 	}
+
 	return nil
 }
 
