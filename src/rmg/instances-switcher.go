@@ -33,12 +33,15 @@ func (thisSwitcher *InstancesSwitcher) Init(sess *session.Session, sourceTargetG
 	thisSwitcher.SelectedSourceTargetGroups = sourceTargetGroups
 	thisSwitcher.SelectedTargetTargetGroups = targetTargetGroups
 	thisSwitcher.targetInstancesMapDescriptions = make(map[string][]*elbv2.TargetDescription, 0)
+	thisSwitcher.sourceInstancesDescriptions = make([]*elbv2.TargetDescription, 0)
 	return nil
 }
 
 // SwitchInstances - switch instances from the source group to the rtarget groups
 func (thisSwitcher *InstancesSwitcher) SwitchInstances() error {
-	thisSwitcher.getInstancesInGroupsIfNeeded()
+	if err := thisSwitcher.getInstancesInGroupsIfNeeded(); err != nil {
+		return err
+	}
 	if len(thisSwitcher.sourceInstancesDescriptions) == 0 {
 		return errors.New("no source instances")
 	}
@@ -117,7 +120,7 @@ func mapInstancesByID(instances []*elbv2.TargetDescription) map[string]int {
 }
 
 func (thisSwitcher *InstancesSwitcher) getInstancesInGroupsIfNeeded() error {
-	if len(thisSwitcher.SelectedSourceTargetGroups) == 0 && len(thisSwitcher.SelectedTargetTargetGroups) == 0 {
+	if len(thisSwitcher.sourceInstancesDescriptions) == 0 {
 		return thisSwitcher.getInstancesInGroups()
 	}
 	return nil
