@@ -79,6 +79,7 @@ func (thisSelector *TargetGroupSelector) checkTargetGroupsForMatch() error {
 			break
 		}
 	}
+	fmt.Printf("done scanning: \r\n%v\r\n\r\n%v\r\n", thisSelector.SelectedSourceGroups, thisSelector.SelectedTargetGroups)
 	fmt.Printf("done scanning: \r\n%v\r\n", thisSelector.GetTargetGroupsName())
 	return nil
 }
