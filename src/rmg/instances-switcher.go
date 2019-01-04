@@ -85,7 +85,7 @@ func (thisSwitcher *InstancesSwitcher) registerInstancesWithTargetGroup(targetTa
 			return err
 		}
 		for _, instanceHealthDescription := range instancesHealth.TargetHealthDescriptions {
-			if *instanceHealthDescription.TargetHealth.State == "healthy" {
+			if *instanceHealthDescription.TargetHealth.State == "healthy" || *instanceHealthDescription.TargetHealth.State == "unused" {
 				healthyInstances++
 			}
 		}
@@ -170,7 +170,7 @@ func getInstancesDescriptionForGroups(targetGroups []*elbv2.TargetGroup,
 			return nil, err
 		}
 		for _, desc := range targetDescription.TargetHealthDescriptions {
-			if *desc.TargetHealth.State == "healthy" {
+			if *desc.TargetHealth.State == "healthy" || *desc.TargetHealth.State == "unused" {
 				result = append(result, desc.Target)
 			}
 		}
