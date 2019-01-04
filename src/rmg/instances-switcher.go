@@ -11,8 +11,8 @@ import (
 // InstancesSwitcher - deploy instances from the source group to the target one
 type InstancesSwitcher struct {
 	awsSession                  *session.Session
-	SelectedSourceGroups        []*elbv2.TargetGroup
-	SelectedTargetGroups        []*elbv2.TargetGroup
+	SelectedSourceTargetGroups  []*elbv2.TargetGroup
+	SelectedTargetTargetGroups  []*elbv2.TargetGroup
 	sourceInstancesDescriptions []*elbv2.TargetDescription
 	// TODO: do we need this? this might be removed
 	targetInstancesMapDescriptions map[string][]*elbv2.TargetDescription
@@ -30,8 +30,8 @@ func (is *InstancesSwitcher) Init(sess *session.Session, sourceTargetGroups, tar
 		return errors.New("source groups cna only contain 1 group")
 	}
 	is.awsSession = sess
-	is.SelectedSourceGroups = sourceTargetGroups
-	is.SelectedTargetGroups = targetTargetGroups
+	is.SelectedSourceTargetGroups = sourceTargetGroups
+	is.SelectedTargetTargetGroups = targetTargetGroups
 	is.targetInstancesMapDescriptions = make(map[string][]*elbv2.TargetDescription, 0)
 	return nil
 }
@@ -41,19 +41,49 @@ func (is *InstancesSwitcher) SwitchInstances() error {
 	if len(is.sourceInstancesDescriptions) == 0 {
 		return errors.New("no source instances")
 	}
-	for _, targetGroup := range is.SelectedTargetGroups {
+	for _, targetGroup := range is.SelectedTargetTargetGroups {
 		// TODO: the source parameter can be removed
-		is.registerInstancesWithTargetGroup(targetGroup, is.sourceInstancesDescriptions)
-		is.removeOldInstancesFromTargetGroup(targetGroup, is.sourceInstancesDescriptions)
+		is.registerInstancesWithTargetGroup(targetGroup)
+		is.removeOldInstancesFromTargetGroup(targetGroup)
+	}
+	is.cleanSourceTargetGroup()
+	return nil
+}
+
+func (is *InstancesSwitcher) registerInstancesWithTargetGroup(targetTargetGroup *elbv2.TargetGroup) error {
+	elbService := elbv2.New(is.awsSession)
+	elbService.RegisterTargets(&elbv2.RegisterTargetsInput{
+		TargetGroupArn: targetTargetGroup.TargetGroupArn,
+		Targets:        is.sourceInstancesDescriptions,
+	})
+	healthyInstances := 0
+	for {
+		time.Sleep(5 * time.Second)
+		instancesHealth, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
+			TargetGroupArn: targetTargetGroup.TargetGroupArn,
+			Targets:        is.sourceInstancesDescriptions,
+		})
+		if err != nil {
+			return err
+		}
+		for _, instanceHealthDescription := range instancesHealth.TargetHealthDescriptions {
+			if *instanceHealthDescription.TargetHealth.State == "healthy" {
+				healthyInstances++
+			}
+		}
+		if healthyInstances == len(is.sourceInstancesDescriptions) {
+			break
+		}
+		healthyInstances = 0
 	}
 	return nil
 }
 
-func (is *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetTargetGroup *elbv2.TargetGroup, sourceInstances []*elbv2.TargetDescription) error {
+func (is *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetTargetGroup *elbv2.TargetGroup) error {
 	elbService := elbv2.New(is.awsSession)
 	var targetInstancesDescription, instancesToBeRemoved []*elbv2.TargetDescription
 	getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetTargetGroup}, &targetInstancesDescription, is.awsSession)
-	sourceInstancesMap := mapInstancesByID(sourceInstances)
+	sourceInstancesMap := mapInstancesByID(is.sourceInstancesDescriptions)
 	for _, instanceDescription := range targetInstancesDescription {
 		if sourceInstancesMap[*instanceDescription.Id] > 0 {
 			continue
@@ -68,7 +98,13 @@ func (is *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetTargetGroup
 	}
 	return nil
 }
-
+func (is *InstancesSwitcher) cleanSourceTargetGroup() {
+	elbService := elbv2.New(is.awsSession)
+	elbService.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+		TargetGroupArn: is.SelectedSourceTargetGroups[0].TargetGroupArn,
+		Targets:        is.sourceInstancesDescriptions,
+	})
+}
 func mapInstancesByID(instances []*elbv2.TargetDescription) map[string]int {
 	result := make(map[string]int, 0)
 	for _, instanceData := range instances {
@@ -77,42 +113,13 @@ func mapInstancesByID(instances []*elbv2.TargetDescription) map[string]int {
 	return result
 }
 
-func (is *InstancesSwitcher) registerInstancesWithTargetGroup(targetTargetGroup *elbv2.TargetGroup, instances []*elbv2.TargetDescription) error {
-	elbService := elbv2.New(is.awsSession)
-	elbService.RegisterTargets(&elbv2.RegisterTargetsInput{
-		TargetGroupArn: targetTargetGroup.TargetGroupArn,
-		Targets:        instances,
-	})
-	healthyInstances := 0
-	for {
-		time.Sleep(5 * time.Second)
-		instancesHealth, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
-			TargetGroupArn: targetTargetGroup.TargetGroupArn,
-			Targets:        instances,
-		})
-		if err != nil {
-			return err
-		}
-		for _, instanceHealthDescription := range instancesHealth.TargetHealthDescriptions {
-			if *instanceHealthDescription.TargetHealth.State == "healthy" {
-				healthyInstances++
-			}
-		}
-		if healthyInstances == len(instances) {
-			break
-		}
-		healthyInstances = 0
-	}
-	return nil
-}
-
 func (is *InstancesSwitcher) getInstancesInGroups() error {
 	is.sourceInstancesDescriptions = make([]*elbv2.TargetDescription, 0)
-	if err := getInstancesDescriptionForGroups(is.SelectedSourceGroups, &is.sourceInstancesDescriptions, is.awsSession); err != nil {
+	if err := getInstancesDescriptionForGroups(is.SelectedSourceTargetGroups, &is.sourceInstancesDescriptions, is.awsSession); err != nil {
 		return err
 	}
 	var targetGroupDescription []*elbv2.TargetDescription
-	for _, targetGroup := range is.SelectedTargetGroups {
+	for _, targetGroup := range is.SelectedTargetTargetGroups {
 		if err := getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetGroup},
 			&targetGroupDescription,
 			is.awsSession); err != nil {
