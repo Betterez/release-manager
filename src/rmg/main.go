@@ -30,21 +30,15 @@ func main() {
 	}
 	log.Println("done scanning")
 	instancesSwitcher := InstancesSwitcher{}
+	log.Println("switching")
 	if err = instancesSwitcher.Init(sess, selector.SelectedSourceGroups, selector.SelectedTargetGroups); err != nil {
-		// if err = instancesSwitcher.Init(sess, []*elbv2.TargetGroup{
-		// 	{
-		// 		TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/ngtg-stgng-notifications/bde5f8e46e4c88f4"),
-		// 	}}, []*elbv2.TargetGroup{
-		// 	{
-		// 		TargetGroupArn: aws.String("arn:aws:elasticloadbalancing:us-east-1:109387325558:targetgroup/staging-notifications-in-tg/2982b148db63dd02"),
-		// 	},
-		// }); err != nil {
 		log.Fatal(err)
 	}
 	if err = instancesSwitcher.getInstancesInGroups(); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(instancesSwitcher.sourceInstancesDescriptions)
-	fmt.Println(instancesSwitcher.targetInstancesMapDescriptions)
+	if err = instancesSwitcher.SwitchInstances(); err != nil {
+		log.Fatal(err)
+	}
 	log.Println("Done")
 }

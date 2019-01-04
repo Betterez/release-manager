@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
@@ -10,10 +10,11 @@ import (
 
 // InstancesSwitcher - deploy instances from the source group to the target one
 type InstancesSwitcher struct {
-	awsSession                     *session.Session
-	SelectedSourceGroups           []*elbv2.TargetGroup
-	SelectedTargetGroups           []*elbv2.TargetGroup
-	sourceInstancesDescriptions    []*elbv2.TargetDescription
+	awsSession                  *session.Session
+	SelectedSourceGroups        []*elbv2.TargetGroup
+	SelectedTargetGroups        []*elbv2.TargetGroup
+	sourceInstancesDescriptions []*elbv2.TargetDescription
+	// TODO: do we need this? this might be removed
 	targetInstancesMapDescriptions map[string][]*elbv2.TargetDescription
 }
 
@@ -40,6 +41,68 @@ func (is *InstancesSwitcher) SwitchInstances() error {
 	if len(is.sourceInstancesDescriptions) == 0 {
 		return errors.New("no source instances")
 	}
+	for _, targetGroup := range is.SelectedTargetGroups {
+		// TODO: the source parameter can be removed
+		is.registerInstancesWithTargetGroup(targetGroup, is.sourceInstancesDescriptions)
+		is.removeOldInstancesFromTargetGroup(targetGroup, is.sourceInstancesDescriptions)
+	}
+	return nil
+}
+
+func (is *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetTargetGroup *elbv2.TargetGroup, sourceInstances []*elbv2.TargetDescription) error {
+	elbService := elbv2.New(is.awsSession)
+	var targetInstancesDescription, instancesToBeRemoved []*elbv2.TargetDescription
+	getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetTargetGroup}, &targetInstancesDescription, is.awsSession)
+	sourceInstancesMap := mapInstancesByID(sourceInstances)
+	for _, instanceDescription := range targetInstancesDescription {
+		if sourceInstancesMap[*instanceDescription.Id] > 0 {
+			continue
+		}
+		instancesToBeRemoved = append(instancesToBeRemoved, instanceDescription)
+	}
+	if len(instancesToBeRemoved) > 0 {
+		elbService.DeregisterTargets(&elbv2.DeregisterTargetsInput{
+			TargetGroupArn: targetTargetGroup.TargetGroupArn,
+			Targets:        instancesToBeRemoved,
+		})
+	}
+	return nil
+}
+
+func mapInstancesByID(instances []*elbv2.TargetDescription) map[string]int {
+	result := make(map[string]int, 0)
+	for _, instanceData := range instances {
+		result[*instanceData.Id]++
+	}
+	return result
+}
+
+func (is *InstancesSwitcher) registerInstancesWithTargetGroup(targetTargetGroup *elbv2.TargetGroup, instances []*elbv2.TargetDescription) error {
+	elbService := elbv2.New(is.awsSession)
+	elbService.RegisterTargets(&elbv2.RegisterTargetsInput{
+		TargetGroupArn: targetTargetGroup.TargetGroupArn,
+		Targets:        instances,
+	})
+	healthyInstances := 0
+	for {
+		time.Sleep(5 * time.Second)
+		instancesHealth, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
+			TargetGroupArn: targetTargetGroup.TargetGroupArn,
+			Targets:        instances,
+		})
+		if err != nil {
+			return err
+		}
+		for _, instanceHealthDescription := range instancesHealth.TargetHealthDescriptions {
+			if *instanceHealthDescription.TargetHealth.State == "healthy" {
+				healthyInstances++
+			}
+		}
+		if healthyInstances == len(instances) {
+			break
+		}
+		healthyInstances = 0
+	}
 	return nil
 }
 
@@ -50,14 +113,12 @@ func (is *InstancesSwitcher) getInstancesInGroups() error {
 	}
 	var targetGroupDescription []*elbv2.TargetDescription
 	for _, targetGroup := range is.SelectedTargetGroups {
-		fmt.Printf("checking %s\r\n", *targetGroup.TargetGroupName)
 		if err := getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetGroup},
 			&targetGroupDescription,
 			is.awsSession); err != nil {
 			return err
 		}
 		is.targetInstancesMapDescriptions[*targetGroup.TargetGroupName] = targetGroupDescription
-		//fmt.Println("targetGroupDescription", targetGroupDescription, "targetGroupDescription")
 	}
 
 	return nil
