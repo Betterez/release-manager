@@ -37,6 +37,21 @@ func (thisSwitcher *InstancesSwitcher) Init(sess *session.Session, sourceTargetG
 	return nil
 }
 
+// func (thisSwitcher *InstancesSwitcher) cleanOldBuilds() error {
+// 	if err := thisSwitcher.getInstancesInGroupsIfNeeded(); err != nil {
+// 		return err
+// 	}
+// 	ec2Service := ec2.New(thisSwitcher.awsSession)
+// 	ec2Service.DescribeTags(&ec2.DescribeTagsInput{
+// 		DryRun:aws.Bool(false),
+// 		Filters:[]*ec2.Filter:{
+// 			{
+//
+// 			},}
+// 	})
+// 	return nil
+// }
+
 // SwitchInstances - switch instances from the source group to the rtarget groups
 func (thisSwitcher *InstancesSwitcher) SwitchInstances() error {
 	if err := thisSwitcher.getInstancesInGroupsIfNeeded(); err != nil {
