@@ -81,8 +81,11 @@ func (thisSwitcher *InstancesSwitcher) registerInstancesWithTargetGroup(targetTa
 
 func (thisSwitcher *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetTargetGroup *elbv2.TargetGroup) error {
 	elbService := elbv2.New(thisSwitcher.awsSession)
+	var err error
 	var targetInstancesDescription, instancesToBeRemoved []*elbv2.TargetDescription
-	getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetTargetGroup}, &targetInstancesDescription, thisSwitcher.awsSession)
+	if targetInstancesDescription, err = getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetTargetGroup}, thisSwitcher.awsSession); err != nil {
+		return err
+	}
 	sourceInstancesMap := mapInstancesByID(thisSwitcher.sourceInstancesDescriptions)
 	for _, instanceDescription := range targetInstancesDescription {
 		if sourceInstancesMap[*instanceDescription.Id] > 0 {
@@ -121,15 +124,14 @@ func (thisSwitcher *InstancesSwitcher) getInstancesInGroupsIfNeeded() error {
 }
 
 func (thisSwitcher *InstancesSwitcher) getInstancesInGroups() error {
-	thisSwitcher.sourceInstancesDescriptions = make([]*elbv2.TargetDescription, 0)
-	if err := getInstancesDescriptionForGroups(thisSwitcher.SelectedSourceTargetGroups, &thisSwitcher.sourceInstancesDescriptions, thisSwitcher.awsSession); err != nil {
+	var err error
+
+	if thisSwitcher.sourceInstancesDescriptions, err = getInstancesDescriptionForGroups(thisSwitcher.SelectedSourceTargetGroups, thisSwitcher.awsSession); err != nil {
 		return err
 	}
 	var targetGroupDescription []*elbv2.TargetDescription
 	for _, targetGroup := range thisSwitcher.SelectedTargetTargetGroups {
-		if err := getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetGroup},
-			&targetGroupDescription,
-			thisSwitcher.awsSession); err != nil {
+		if targetGroupDescription, err = getInstancesDescriptionForGroups([]*elbv2.TargetGroup{targetGroup}, thisSwitcher.awsSession); err != nil {
 			return err
 		}
 		thisSwitcher.targetInstancesMapDescriptions[*targetGroup.TargetGroupName] = targetGroupDescription
@@ -138,22 +140,22 @@ func (thisSwitcher *InstancesSwitcher) getInstancesInGroups() error {
 }
 
 func getInstancesDescriptionForGroups(targetGroups []*elbv2.TargetGroup,
-	instancesDescriptions *[]*elbv2.TargetDescription,
-	awsSession *session.Session) error {
+	awsSession *session.Session) ([]*elbv2.TargetDescription, error) {
 	elbService := elbv2.New(awsSession)
+	var result []*elbv2.TargetDescription
 
 	for _, currentTargetGroup := range targetGroups {
 		targetDescription, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
 			TargetGroupArn: currentTargetGroup.TargetGroupArn,
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, desc := range targetDescription.TargetHealthDescriptions {
 			if *desc.TargetHealth.State == "healthy" {
-				*instancesDescriptions = append(*instancesDescriptions, desc.Target)
+				result = append(result, desc.Target)
 			}
 		}
 	}
-	return nil
+	return result, nil
 }
