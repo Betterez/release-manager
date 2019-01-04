@@ -28,7 +28,7 @@ func main() {
 	if err = selector.checkTargetGroupsForMatch(); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("done scanning")
+	log.Printf("done scanning: \r\n%v\r\n", selector.GetTargetGroupsName())
 	instancesSwitcher := InstancesSwitcher{}
 	log.Println("switching")
 	if err = instancesSwitcher.Init(sess, selector.SelectedSourceGroups, selector.SelectedTargetGroups); err != nil {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/elbv2"
@@ -32,54 +33,57 @@ const (
 	TargetGroupFoundRelease
 )
 
-func (tgs *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) error {
+func (thisSelector *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) error {
 	if sess == nil {
 		return errors.New("Bad session object")
 	}
-	tgs.awsSession = sess
-	tgs.SelectedSourceGroups = make([]*elbv2.TargetGroup, 0)
-	tgs.SelectedTargetGroups = make([]*elbv2.TargetGroup, 0)
-	tgs.path = path
-	tgs.environment = environment
-	tgs.elbType = elbType
+	thisSelector.awsSession = sess
+	thisSelector.SelectedSourceGroups = make([]*elbv2.TargetGroup, 0)
+	thisSelector.SelectedTargetGroups = make([]*elbv2.TargetGroup, 0)
+	thisSelector.path = path
+	thisSelector.environment = environment
+	thisSelector.elbType = elbType
 	return nil
 }
 
-func (tgs *TargetGroupSelector) getallTargetGroupsForTheAccount() error {
-	elbService := elbv2.New(tgs.awsSession)
+func (thisSelector *TargetGroupSelector) getallTargetGroupsForTheAccount() error {
+	elbService := elbv2.New(thisSelector.awsSession)
 	var err error
-	tgs.allTargetGroupsForTheAccount, err = elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
+	thisSelector.allTargetGroupsForTheAccount, err = elbService.DescribeTargetGroups(&elbv2.DescribeTargetGroupsInput{})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (tgs *TargetGroupSelector) checkTargetGroupsForMatch() error {
-	tgs.getallTargetGroupsForTheAccount()
-	elbService := elbv2.New(tgs.awsSession)
-	for _, currentTargetGroupt := range tgs.allTargetGroupsForTheAccount.TargetGroups {
+func (thisSelector *TargetGroupSelector) checkTargetGroupsForMatch() error {
+	thisSelector.getallTargetGroupsForTheAccount()
+	elbService := elbv2.New(thisSelector.awsSession)
+	for _, currentTargetGroupt := range thisSelector.allTargetGroupsForTheAccount.TargetGroups {
 		targetGroupTags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{
 			ResourceArns: []*string{currentTargetGroupt.TargetGroupArn},
 		})
 		if err != nil {
 			return err
 		}
-		switch tgs.checkTargetGroupTagsForMatch(targetGroupTags) {
+		switch thisSelector.checkTargetGroupTagsForMatch(targetGroupTags) {
 		case TargetGroupFoundRelease:
-			tgs.SelectedSourceGroups = append(tgs.SelectedTargetGroups, currentTargetGroupt)
+			fmt.Printf("adding %s to release(source)\r\n", *currentTargetGroupt.TargetGroupName)
+			thisSelector.SelectedSourceGroups = append(thisSelector.SelectedTargetGroups, currentTargetGroupt)
 			break
 		case TargetGroupFoundNonRelease:
-			tgs.SelectedTargetGroups = append(tgs.SelectedSourceGroups, currentTargetGroupt)
+			fmt.Printf("adding %s to none release(target)\r\n", *currentTargetGroupt.TargetGroupName)
+			thisSelector.SelectedTargetGroups = append(thisSelector.SelectedSourceGroups, currentTargetGroupt)
 			break
 		default:
 			break
 		}
 	}
+	fmt.Printf("done scanning: \r\n%v\r\n", thisSelector.GetTargetGroupsName())
 	return nil
 }
 
-func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *elbv2.DescribeTagsOutput) TargetGroupSearchResult {
+func (thisSelector *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *elbv2.DescribeTagsOutput) TargetGroupSearchResult {
 	numberOfMatchingTags := 0
 	isAReleaseTargetGroup := false
 	for _, tagDescription := range targetGroupTags.TagDescriptions {
@@ -96,17 +100,17 @@ func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *el
 				}
 				break
 			case "Environment":
-				if *currentTagData.Value == tgs.environment {
+				if *currentTagData.Value == thisSelector.environment {
 					numberOfMatchingTags++
 				}
 				break
 			case "Elb-Type":
-				if *currentTagData.Value == tgs.elbType {
+				if *currentTagData.Value == thisSelector.elbType {
 					numberOfMatchingTags++
 				}
 				break
 			case "Path-Name":
-				if *currentTagData.Value == tgs.path {
+				if *currentTagData.Value == thisSelector.path {
 					numberOfMatchingTags++
 				}
 				break
@@ -120,4 +124,16 @@ func (tgs *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGroupTags *el
 		return TargetGroupFoundNonRelease
 	}
 	return TargetGroupNotFound
+}
+
+// GetTargetGroupsName - returns a map with the target groups names
+func (thisSelector *TargetGroupSelector) GetTargetGroupsName() map[string][]string {
+	result := make(map[string][]string, 0)
+	for _, sourceGroup := range thisSelector.SelectedSourceGroups {
+		result["source"] = append(result["source"], *sourceGroup.TargetGroupName)
+	}
+	for _, targetGroup := range thisSelector.SelectedTargetGroups {
+		result["target"] = append(result["target"], *targetGroup.TargetGroupName)
+	}
+	return result
 }
