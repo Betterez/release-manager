@@ -49,7 +49,16 @@ func (thisSwitcher *InstancesSwitcher) SwitchInstances() error {
 		thisSwitcher.registerInstancesWithTargetGroup(targetGroup)
 		thisSwitcher.removeOldInstancesFromTargetGroup(targetGroup)
 	}
-	//thisSwitcher.cleanSourceTargetGroupFromOldInstances()
+	return nil
+}
+
+// SwitchInstancesAndRemoveOldSources - switching instances and removing the old ones
+func (thisSwitcher *InstancesSwitcher) SwitchInstancesAndRemoveOldSources() error {
+	err := thisSwitcher.SwitchInstances()
+	if err != nil {
+		return err
+	}
+	thisSwitcher.cleanSourceTargetGroupFromOldInstances()
 	return nil
 }
 
@@ -104,6 +113,7 @@ func (thisSwitcher *InstancesSwitcher) removeOldInstancesFromTargetGroup(targetT
 	}
 	return nil
 }
+
 func (thisSwitcher *InstancesSwitcher) cleanSourceTargetGroupFromOldInstances() {
 	elbService := elbv2.New(thisSwitcher.awsSession)
 	elbService.DeregisterTargets(&elbv2.DeregisterTargetsInput{
@@ -111,6 +121,7 @@ func (thisSwitcher *InstancesSwitcher) cleanSourceTargetGroupFromOldInstances() 
 		Targets:        thisSwitcher.sourceInstancesDescriptions,
 	})
 }
+
 func mapInstancesByID(instances []*elbv2.TargetDescription) map[string]int {
 	result := make(map[string]int, 0)
 	for _, instanceData := range instances {

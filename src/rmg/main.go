@@ -13,6 +13,7 @@ func main() {
 	environment := flag.String("env", "", "environment to perform the switch")
 	path := flag.String("path", "", "project path")
 	elbType := flag.String("elb-type", "", "the elb type")
+	removeSource := flag.String("remove-source", "no", "remove the source instances from the source target group")
 	flag.Parse()
 	sess, err := GetAWSSession()
 	if err != nil {
@@ -34,7 +35,12 @@ func main() {
 	if err = instancesSwitcher.Init(sess, selector.SelectedSourceGroups, selector.SelectedTargetGroups); err != nil {
 		log.Fatal(err)
 	}
-	if err = instancesSwitcher.SwitchInstances(); err != nil {
+	if *removeSource == "yes" {
+		err = instancesSwitcher.SwitchInstancesAndRemoveOldSources()
+	} else {
+		err = instancesSwitcher.SwitchInstances()
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Done")
