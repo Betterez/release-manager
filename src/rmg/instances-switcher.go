@@ -8,6 +8,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/elbv2"
 )
 
+const (
+	MaximumWaitingLoops = 15
+)
+
 // InstancesSwitcher - deploy instances from the source group to the target one
 type InstancesSwitcher struct {
 	awsSession                  *session.Session
@@ -69,6 +73,7 @@ func (thisSwitcher *InstancesSwitcher) registerInstancesWithTargetGroup(targetTa
 		Targets:        thisSwitcher.sourceInstancesDescriptions,
 	})
 	healthyInstances := 0
+	loopCounter := 0
 	for {
 		time.Sleep(5 * time.Second)
 		instancesHealth, err := elbService.DescribeTargetHealth(&elbv2.DescribeTargetHealthInput{
@@ -87,6 +92,10 @@ func (thisSwitcher *InstancesSwitcher) registerInstancesWithTargetGroup(targetTa
 			break
 		}
 		healthyInstances = 0
+		loopCounter++
+		if loopCounter >= MaximumWaitingLoops {
+			return errors.New("time out waiting for instance")
+		}
 	}
 	return nil
 }

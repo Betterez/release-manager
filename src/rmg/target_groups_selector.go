@@ -7,11 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/elbv2"
 )
 
-// TargetGroupSelector - filter target groups based on tags
 type TargetGroupSelector struct {
-	// SelectedSourceGroups - target groups that are release and will be used to get new instances
-	SelectedSourceGroups []*elbv2.TargetGroup
-	// SelectedTargetGroups - target groups that are not release, and will be used to put the new instances
+	SelectedSourceGroups         []*elbv2.TargetGroup
 	SelectedTargetGroups         []*elbv2.TargetGroup
 	awsSession                   *session.Session
 	allTargetGroupsForTheAccount *elbv2.DescribeTargetGroupsOutput
@@ -20,23 +17,19 @@ type TargetGroupSelector struct {
 	elbType                      string
 }
 
-// TargetGroupSearchResult - results from target group search
 type TargetGroupSearchResult int
 
 const (
-	// TargetGroupNotFound - target group not found
 	TargetGroupNotFound TargetGroupSearchResult = iota
-	// TargetGroupFoundNonRelease -source (not release) tg
 	TargetGroupFoundNonRelease
-	// TargetGroupFoundRelease - release tg
 	TargetGroupFoundRelease
 )
 
-func (thisSelector *TargetGroupSelector) init(sess *session.Session, environment, path, elbType string) error {
-	if sess == nil {
+func (thisSelector *TargetGroupSelector) init(awsSession *session.Session, environment, path, elbType string) error {
+	if awsSession == nil {
 		return errors.New("Bad session object")
 	}
-	thisSelector.awsSession = sess
+	thisSelector.awsSession = awsSession
 	thisSelector.SelectedSourceGroups = make([]*elbv2.TargetGroup, 0)
 	thisSelector.SelectedTargetGroups = make([]*elbv2.TargetGroup, 0)
 	thisSelector.path = path
@@ -58,19 +51,19 @@ func (thisSelector *TargetGroupSelector) getallTargetGroupsForTheAccount() error
 func (thisSelector *TargetGroupSelector) checkTargetGroupsForMatch() error {
 	thisSelector.getallTargetGroupsForTheAccount()
 	elbService := elbv2.New(thisSelector.awsSession)
-	for _, currentTargetGroupt := range thisSelector.allTargetGroupsForTheAccount.TargetGroups {
+	for _, currentTargetGroup := range thisSelector.allTargetGroupsForTheAccount.TargetGroups {
 		targetGroupTags, err := elbService.DescribeTags(&elbv2.DescribeTagsInput{
-			ResourceArns: []*string{currentTargetGroupt.TargetGroupArn},
+			ResourceArns: []*string{currentTargetGroup.TargetGroupArn},
 		})
 		if err != nil {
 			return err
 		}
 		switch thisSelector.checkTargetGroupTagsForMatch(targetGroupTags) {
 		case TargetGroupFoundRelease:
-			thisSelector.SelectedSourceGroups = append(thisSelector.SelectedSourceGroups, currentTargetGroupt)
+			thisSelector.SelectedSourceGroups = append(thisSelector.SelectedSourceGroups, currentTargetGroup)
 			break
 		case TargetGroupFoundNonRelease:
-			thisSelector.SelectedTargetGroups = append(thisSelector.SelectedTargetGroups, currentTargetGroupt)
+			thisSelector.SelectedTargetGroups = append(thisSelector.SelectedTargetGroups, currentTargetGroup)
 			break
 		default:
 			break
@@ -122,7 +115,6 @@ func (thisSelector *TargetGroupSelector) checkTargetGroupTagsForMatch(targetGrou
 	return TargetGroupNotFound
 }
 
-// GetTargetGroupsName - returns a map with the target groups names
 func (thisSelector *TargetGroupSelector) GetTargetGroupsName() map[string][]string {
 	result := make(map[string][]string, 0)
 	for _, sourceGroup := range thisSelector.SelectedSourceGroups {
